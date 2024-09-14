@@ -86,30 +86,38 @@ func (qc *QueryListConfig) WithPage(page int) *QueryListConfig {
 
 func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig) (*QueryListResult[T], error) {
 
+	var tmpdb gorm.DB
+	tmpdb = *dc
+	tmpdbPtr := &tmpdb
+
+	var tmptdc gorm.DB
+	tmptdc = *tdc
+	tmptdcPtr := &tmptdc
+
 	qr := &QueryListResult[T]{
 		Total: 0,
 		Page:  qc.Page,
 		Data:  make([]T, 0),
 	}
 
-	tdc = tdc.Model(*new(T))
+	tmpdbPtr = tmpdbPtr.Model(*new(T))
 
 	for _, where := range qc.Wheres {
-		tdc = tdc.Where(where.Query, where.Args)
+		tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
 	}
 
-	if err := tdc.Count(&qr.Total).Error; err != nil {
+	if err := tmpdbPtr.Debug().Count(&qr.Total).Error; err != nil {
 		return nil, err
 	}
 
 	offset := (qc.Page - 1) * qc.PageSize
 
-	dc = dc.Model(*new(T))
+	tmptdcPtr = tmptdcPtr.Model(*new(T))
 	for _, where := range qc.Wheres {
-		dc = dc.Where(where.Query, where.Args)
+		tmptdcPtr = tmptdcPtr.Where(where.Query, where.Args)
 	}
 
-	err := dc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
+	err := tmptdcPtr.Debug().Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
 
 	if err != nil {
 		return nil, err
@@ -147,22 +155,25 @@ func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
 }
 
 func Exist[T any](dbv gorm.DB, qc *QueryConfig) (bool, error) {
-	db := &dbv
-	if db == nil {
+
+	var tmpdb gorm.DB
+	tmpdb = dbv
+	tmpdbPtr := &tmpdb
+	if tmpdbPtr == nil {
 		return false, fmt.Errorf("get db client failed")
 	}
 
-	db = db.Model(*new(T))
+	tmpdbPtr = tmpdbPtr.Model(*new(T))
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			db = db.Where(where.Query, where.Args)
+			tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
 		}
 	}
 
 	count := int64(0)
 
-	db.Count(&count)
+	tmpdbPtr.Debug().Count(&count)
 
 	return count > 0, nil
 
@@ -193,23 +204,25 @@ func Delete[T any](dbv gorm.DB, qc *QueryConfig) error {
 
 func Query[T any](dbv gorm.DB, qc *QueryConfig) (*T, error) {
 
-	db := &dbv
+	var tmpdb gorm.DB
+	tmpdb = dbv
+	tmpdbPtr := &tmpdb
 
-	if db == nil {
+	if tmpdbPtr == nil {
 		return nil, fmt.Errorf("get db client failed")
 	}
 
-	db = db.Model(*new(T))
+	tmpdbPtr = tmpdbPtr.Model(*new(T))
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			db = db.Where(where.Query, where.Args)
+			tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
 		}
 	}
 
 	t := new(T)
 
-	e := db.First(t).Error
+	e := tmpdbPtr.Debug().First(t).Error
 
 	if e != nil && errors.Is(e, gorm.ErrRecordNotFound) {
 		return nil, nil
