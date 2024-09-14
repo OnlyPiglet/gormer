@@ -146,7 +146,8 @@ func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
 	return qc
 }
 
-func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
+func Exist[T any](dbv gorm.DB, qc *QueryConfig) (bool, error) {
+	db := &dbv
 	if db == nil {
 		return false, fmt.Errorf("get db client failed")
 	}
@@ -167,28 +168,21 @@ func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
 
 }
 
-func Update[T any](db *gorm.DB, t T) error {
+func Update[T any](dbv gorm.DB, t T) error {
+	db := &dbv
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
 	return db.Model(*new(T)).Save(&t).Error
 }
 
-func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
+func Delete[T any](dbv gorm.DB, qc *QueryConfig) error {
+	db := &dbv
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
-	exist, err := Exist[T](db, qc)
 
-	if err != nil {
-		return err
-	}
-
-	if !exist {
-		return nil
-	}
-
-	t, err := Query[T](db, qc)
+	t, err := Query[T](*db, qc)
 
 	if err != nil {
 		return err
@@ -197,7 +191,9 @@ func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
 	return db.Delete(t).Error
 }
 
-func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
+func Query[T any](dbv gorm.DB, qc *QueryConfig) (*T, error) {
+
+	db := &dbv
 
 	if db == nil {
 		return nil, fmt.Errorf("get db client failed")
