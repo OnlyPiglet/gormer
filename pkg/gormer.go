@@ -41,16 +41,14 @@ type QueryListResult[T any] struct {
 	Data  []T   `json:"data"`
 }
 
-var defaultQuery = &QueryListConfig{
-	PageSize: 10,
-	Page:     1,
-	Order:    DESC,
-	OrderBy:  "updated_at",
-	Wheres:   []Where{},
-}
-
 func NewQueryListConfig() *QueryListConfig {
-	return defaultQuery
+	return &QueryListConfig{
+		PageSize: 10,
+		Page:     1,
+		Order:    DESC,
+		OrderBy:  "updated_at",
+		Wheres:   []Where{},
+	}
 }
 
 func (qc *QueryListConfig) WithWheres(wheres []Where) *QueryListConfig {
@@ -86,38 +84,30 @@ func (qc *QueryListConfig) WithPage(page int) *QueryListConfig {
 
 func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig) (*QueryListResult[T], error) {
 
-	var tmpdb gorm.DB
-	tmpdb = *dc
-	tmpdbPtr := &tmpdb
-
-	var tmptdc gorm.DB
-	tmptdc = *tdc
-	tmptdcPtr := &tmptdc
-
 	qr := &QueryListResult[T]{
 		Total: 0,
 		Page:  qc.Page,
 		Data:  make([]T, 0),
 	}
 
-	tmpdbPtr = tmpdbPtr.Model(*new(T))
+	dc = dc.Model(*new(T))
 
 	for _, where := range qc.Wheres {
-		tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
+		dc = dc.Where(where.Query, where.Args)
 	}
 
-	if err := tmpdbPtr.Debug().Count(&qr.Total).Error; err != nil {
+	if err := dc.Count(&qr.Total).Error; err != nil {
 		return nil, err
 	}
 
 	offset := (qc.Page - 1) * qc.PageSize
 
-	tmptdcPtr = tmptdcPtr.Model(*new(T))
+	tdc = tdc.Model(*new(T))
 	for _, where := range qc.Wheres {
-		tmptdcPtr = tmptdcPtr.Where(where.Query, where.Args)
+		tdc = tdc.Where(where.Query, where.Args)
 	}
 
-	err := tmptdcPtr.Debug().Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
+	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
 
 	if err != nil {
 		return nil, err
@@ -141,12 +131,9 @@ type QueryConfig struct {
 	Wheres []Where `json:"wheres"`
 }
 
-var defaultQueryConfig = &QueryConfig{
-	Wheres: []Where{},
-}
-
 func NewQueryConfig() *QueryConfig {
-	return defaultQueryConfig
+	return &QueryConfig{
+		Wheres: []Where{}}
 }
 
 func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
@@ -154,46 +141,42 @@ func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
 	return qc
 }
 
-func Exist[T any](dbv gorm.DB, qc *QueryConfig) (bool, error) {
-
-	var tmpdb gorm.DB
-	tmpdb = dbv
-	tmpdbPtr := &tmpdb
-	if tmpdbPtr == nil {
+func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
+	if db == nil {
 		return false, fmt.Errorf("get db client failed")
 	}
 
-	tmpdbPtr = tmpdbPtr.Model(*new(T))
+	db = db.Model(*new(T))
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
+			db = db.Where(where.Query, where.Args)
 		}
 	}
 
 	count := int64(0)
 
-	tmpdbPtr.Debug().Count(&count)
+	if err := db.Count(&count).Error; err != nil {
+		return false, err
+	}
 
 	return count > 0, nil
 
 }
 
-func Update[T any](dbv gorm.DB, t T) error {
-	db := &dbv
+func Update[T any](db *gorm.DB, t T) error {
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
 	return db.Model(*new(T)).Save(&t).Error
 }
 
-func Delete[T any](dbv gorm.DB, qc *QueryConfig) error {
-	db := &dbv
+func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
 
-	t, err := Query[T](*db, qc)
+	t, err := Query[T](db, qc)
 
 	if err != nil {
 		return err
@@ -202,27 +185,23 @@ func Delete[T any](dbv gorm.DB, qc *QueryConfig) error {
 	return db.Delete(t).Error
 }
 
-func Query[T any](dbv gorm.DB, qc *QueryConfig) (*T, error) {
+func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
 
-	var tmpdb gorm.DB
-	tmpdb = dbv
-	tmpdbPtr := &tmpdb
-
-	if tmpdbPtr == nil {
+	if db == nil {
 		return nil, fmt.Errorf("get db client failed")
 	}
 
-	tmpdbPtr = tmpdbPtr.Model(*new(T))
+	db = db.Model(*new(T))
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			tmpdbPtr = tmpdbPtr.Where(where.Query, where.Args)
+			db = db.Where(where.Query, where.Args)
 		}
 	}
 
 	t := new(T)
 
-	e := tmpdbPtr.Debug().First(t).Error
+	e := db.First(t).Error
 
 	if e != nil && errors.Is(e, gorm.ErrRecordNotFound) {
 		return nil, nil
