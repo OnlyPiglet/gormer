@@ -1,5 +1,5 @@
 package gormer
 
 type UpdateI interface {
-	ID() string
+	ID() uint
 }
