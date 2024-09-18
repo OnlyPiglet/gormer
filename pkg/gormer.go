@@ -164,11 +164,11 @@ func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
 
 }
 
-func Update[T any](db *gorm.DB, t T) error {
+func Update[T any](db *gorm.DB, t *T) error {
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
-	return db.Model(*new(T)).Save(&t).Error
+	return db.Save(t).Error
 }
 
 func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
