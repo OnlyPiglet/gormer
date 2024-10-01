@@ -23,13 +23,13 @@ func (o Order) String() string {
 	}
 }
 
-type QueryListConfig struct {
-	PageSize        int              `json:"page_size"`
-	Page            int              `json:"page"`
-	Order           Order            `json:"order"`
-	OrderBy         string           `json:"order_by"`
-	Wheres          []Where          `json:"wheres"`
-	AdviceItemFuncs []AdviceItemFunc `json:"advice_item_funcs"`
+type QueryListConfig[T any] struct {
+	PageSize        int                 `json:"page_size"`
+	Page            int                 `json:"page"`
+	Order           Order               `json:"order"`
+	OrderBy         string              `json:"order_by"`
+	Wheres          []Where             `json:"wheres"`
+	AdviceItemFuncs []AdviceItemFunc[T] `json:"advice_item_funcs"`
 }
 
 type Where struct {
@@ -43,40 +43,40 @@ type QueryListResult[T any] struct {
 	Data  []T   `json:"data"`
 }
 
-func NewQueryListConfig() *QueryListConfig {
-	return &QueryListConfig{
+func NewQueryListConfig[T any]() *QueryListConfig[T] {
+	return &QueryListConfig[T]{
 		PageSize:        10,
 		Page:            1,
 		Order:           DESC,
 		OrderBy:         "updated_at",
 		Wheres:          []Where{},
-		AdviceItemFuncs: []AdviceItemFunc{},
+		AdviceItemFuncs: []AdviceItemFunc[T]{},
 	}
 }
 
-type AdviceItemFunc func(t interface{}) (interface{}, error)
+type AdviceItemFunc[T any] func(t T) (T, error)
 
-func (qc *QueryListConfig) WithWheres(wheres []Where) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithWheres(wheres []Where) *QueryListConfig[T] {
 	qc.Wheres = append(qc.Wheres, wheres...)
 	return qc
 }
 
-func (qc *QueryListConfig) WithAdviceItemFunc(funcs []AdviceItemFunc) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithAdviceItemFunc(funcs []AdviceItemFunc[T]) *QueryListConfig[T] {
 	qc.AdviceItemFuncs = append(qc.AdviceItemFuncs, funcs...)
 	return qc
 }
 
-func (qc *QueryListConfig) WithOrderBy(orderBy string) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithOrderBy(orderBy string) *QueryListConfig[T] {
 	qc.OrderBy = orderBy
 	return qc
 }
 
-func (qc *QueryListConfig) WithOrder(order Order) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithOrder(order Order) *QueryListConfig[T] {
 	qc.Order = order
 	return qc
 }
 
-func (qc *QueryListConfig) WithPageSize(pageSize int) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithPageSize(pageSize int) *QueryListConfig[T] {
 	if pageSize <= 0 {
 		return qc
 	}
@@ -84,7 +84,7 @@ func (qc *QueryListConfig) WithPageSize(pageSize int) *QueryListConfig {
 	return qc
 }
 
-func (qc *QueryListConfig) WithPage(page int) *QueryListConfig {
+func (qc *QueryListConfig[T]) WithPage(page int) *QueryListConfig[T] {
 	if page <= 0 {
 		return qc
 	}
@@ -92,7 +92,7 @@ func (qc *QueryListConfig) WithPage(page int) *QueryListConfig {
 	return qc
 }
 
-func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig) (*QueryListResult[T], error) {
+func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*QueryListResult[T], error) {
 
 	qr := &QueryListResult[T]{
 		Total: 0,
