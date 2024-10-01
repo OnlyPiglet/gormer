@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
+	"log"
+	"log/slog"
 )
 
 type Order int
@@ -28,6 +30,7 @@ type QueryListConfig struct {
 	Order    Order   `json:"order"`
 	OrderBy  string  `json:"order_by"`
 	Wheres   []Where `json:"wheres"`
+	AdviceItemFuncs []AdviceItemFunc `json:"advice_item_funcs"`
 }
 
 type Where struct {
@@ -43,16 +46,24 @@ type QueryListResult[T any] struct {
 
 func NewQueryListConfig() *QueryListConfig {
 	return &QueryListConfig{
-		PageSize: 10,
-		Page:     1,
-		Order:    DESC,
-		OrderBy:  "updated_at",
-		Wheres:   []Where{},
+		PageSize:        10,
+		Page:            1,
+		Order:           DESC,
+		OrderBy:         "updated_at",
+		Wheres:          []Where{},
+		AdviceItemFuncs: []AdviceItemFunc
 	}
 }
 
+type AdviceItemFunc func(t interface{}) (interface{},error)
+
 func (qc *QueryListConfig) WithWheres(wheres []Where) *QueryListConfig {
 	qc.Wheres = append(qc.Wheres, wheres...)
+	return qc
+}
+
+func (qc *QueryListConfig) WithAdviceItemFunc(funcs []AdviceItemFunc) *QueryListConfig {
+	qc.AdviceItemFuncs = append(qc.AdviceItemFuncs, funcs...)
 	return qc
 }
 
@@ -111,6 +122,15 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig) (*QueryLis
 
 	if err != nil {
 		return nil, err
+	}
+
+	for _, itemFunc := range qc.AdviceItemFuncs {
+		for j, datum := range qr.Data {
+			qr.Data[j],err = itemFunc(datum)
+			if err != nil {
+				slog.Warn(err.Error())
+			}
+		}
 	}
 
 	return qr, nil
