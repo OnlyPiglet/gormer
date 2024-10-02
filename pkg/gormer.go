@@ -34,8 +34,8 @@ type QueryListConfig[T any] struct {
 }
 
 type Where struct {
-	Query string `json:"query"`
-	Args  string `json:"args"`
+	Query string      `json:"query"`
+	Args  interface{} `json:"args"`
 }
 
 type QueryListResult[T any] struct {
