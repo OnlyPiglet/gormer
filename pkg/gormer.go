@@ -30,6 +30,7 @@ type QueryListConfig[T any] struct {
 	OrderBy         string              `json:"order_by"`
 	Wheres          []Where             `json:"wheres"`
 	AdviceItemFuncs []AdviceItemFunc[T] `json:"advice_item_funcs"`
+	Preloads        []string            `json:"preloads"`
 }
 
 type Where struct {
@@ -51,6 +52,7 @@ func NewQueryListConfig[T any]() *QueryListConfig[T] {
 		OrderBy:         "updated_at",
 		Wheres:          []Where{},
 		AdviceItemFuncs: []AdviceItemFunc[T]{},
+		Preloads:        []string{},
 	}
 }
 
@@ -58,6 +60,11 @@ type AdviceItemFunc[T any] func(t T) (T, error)
 
 func (qc *QueryListConfig[T]) WithWheres(wheres []Where) *QueryListConfig[T] {
 	qc.Wheres = append(qc.Wheres, wheres...)
+	return qc
+}
+
+func (qc *QueryListConfig[T]) WithPreloads(preloads []string) *QueryListConfig[T] {
+	qc.Preloads = append(qc.Preloads, preloads...)
 	return qc
 }
 
@@ -117,6 +124,12 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 		tdc = tdc.Where(where.Query, where.Args)
 	}
 
+	if qc != nil && qc.Preloads != nil {
+		for _, preload := range qc.Preloads {
+			tdc = tdc.Preload(preload)
+		}
+	}
+
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
 
 	if err != nil {
@@ -147,16 +160,23 @@ func Create[T any](db *gorm.DB, t T) error {
 }
 
 type QueryConfig struct {
-	Wheres []Where `json:"wheres"`
+	Wheres   []Where  `json:"wheres"`
+	Preloads []string `json:"preloads"`
 }
 
 func NewQueryConfig() *QueryConfig {
 	return &QueryConfig{
-		Wheres: []Where{}}
+		Wheres:   []Where{},
+		Preloads: []string{}}
 }
 
 func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
 	qc.Wheres = append(qc.Wheres, wheres...)
+	return qc
+}
+
+func (qc *QueryConfig) WithPreloads(preloads []string) *QueryConfig {
+	qc.Preloads = append(qc.Preloads, preloads...)
 	return qc
 }
 
@@ -215,6 +235,12 @@ func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
 			db = db.Where(where.Query, where.Args)
+		}
+	}
+
+	if qc != nil && qc.Preloads != nil {
+		for _, preload := range qc.Preloads {
+			db = db.Preload(preload)
 		}
 	}
 
