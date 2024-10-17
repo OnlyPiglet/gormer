@@ -287,7 +287,6 @@ func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
 		for _, where := range qc.Wheres {
 			switch where.Type {
 			case JsonType:
-				println(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query))
 				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
 			default:
 				db = db.Where(where.Query, where.Args)
