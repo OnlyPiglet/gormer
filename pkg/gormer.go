@@ -1,17 +1,55 @@
 package gormer
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"gorm.io/gorm"
 	"log/slog"
+	"strings"
+	"time"
 )
+
+type CustomerJsonField map[string]interface{}
+
+func (c CustomerJsonField) Value() (driver.Value, error) {
+	b, err := json.Marshal(c)
+	return string(b), err
+}
+
+func (c *CustomerJsonField) Scan(input interface{}) error {
+	return json.Unmarshal(input.([]byte), c)
+}
+
+const customerJsonFieldName = "customer_json_field"
+
+type Model struct {
+	ID                uint              `gorm:"primarykey" json:"id"`
+	CreatedAt         time.Time         `json:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt    `gorm:"index" json:"deleted_at"`
+	CustomerJsonField CustomerJsonField `gorm:"type:json" json:"customer_json_field"`
+}
+
+const customerJsonFieldPrefix = "gorm_cjw_"
+
+func IfCustomerJsonField(field string) bool {
+	return strings.HasPrefix(field, customerJsonFieldPrefix)
+}
 
 type Order int
 
 const (
 	DESC Order = iota
 	ASC
+)
+
+type WhereType int
+
+const (
+	NormalType WhereType = iota
+	JsonType
 )
 
 func (o Order) String() string {
@@ -24,17 +62,19 @@ func (o Order) String() string {
 }
 
 type QueryListConfig[T any] struct {
-	PageSize        int                 `json:"page_size"`
-	Page            int                 `json:"page"`
-	Order           Order               `json:"order"`
-	OrderBy         string              `json:"order_by"`
-	Wheres          []Where             `json:"wheres"`
-	AdviceItemFuncs []AdviceItemFunc[T] `json:"advice_item_funcs"`
-	Preloads        []string            `json:"preloads"`
+	PageSize           int                 `json:"page_size"`
+	Page               int                 `json:"page"`
+	Order              Order               `json:"order"`
+	OrderBy            string              `json:"order_by"`
+	Wheres             []Where             `json:"wheres"`
+	CustomerJsonWheres []Where             `json:"customer_json_where"`
+	AdviceItemFuncs    []AdviceItemFunc[T] `json:"advice_item_funcs"`
+	Preloads           []string            `json:"preloads"`
 }
 
 type Where struct {
 	Query string      `json:"query"`
+	Type  WhereType   `json:"type"`
 	Args  interface{} `json:"args"`
 }
 
@@ -121,7 +161,12 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 
 	tdc = tdc.Model(*new(T))
 	for _, where := range qc.Wheres {
-		tdc = tdc.Where(where.Query, where.Args)
+		switch where.Type {
+		case JsonType:
+			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			tdc = tdc.Where(where.Query, where.Args)
+		}
 	}
 
 	if qc != nil && qc.Preloads != nil {
@@ -167,7 +212,8 @@ type QueryConfig struct {
 func NewQueryConfig() *QueryConfig {
 	return &QueryConfig{
 		Wheres:   []Where{},
-		Preloads: []string{}}
+		Preloads: []string{},
+	}
 }
 
 func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
@@ -189,7 +235,12 @@ func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			db = db.Where(where.Query, where.Args)
+			switch where.Type {
+			case JsonType:
+				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+			default:
+				db = db.Where(where.Query, where.Args)
+			}
 		}
 	}
 
@@ -234,7 +285,13 @@ func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
 
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
-			db = db.Where(where.Query, where.Args)
+			switch where.Type {
+			case JsonType:
+				println(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query))
+				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+			default:
+				db = db.Where(where.Query, where.Args)
+			}
 		}
 	}
 
