@@ -58,13 +58,34 @@ func TestJsonField(t *testing.T) {
 	ddb := db.WithContext(context.Background())
 	query, err := Query[User](ddb, NewQueryConfig().WithWheres([]Where{
 		{
-			"gorm_cjw_na",
+			"gorm_cjw_nb",
 			JsonType,
-			"123",
+			"78",
 		},
 	}))
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("%v", query)
+}
+
+func TestCreateJsonField(t *testing.T) {
+	if db == nil {
+		log.Fatalf("db is nil")
+	}
+	ddb := db.WithContext(context.Background())
+	u := User{
+		Model: Model{
+			CustomerJsonField: map[string]interface{}{
+				"gorm_cjw_na": "asd",
+				"gorm_cjw_nb": 456,
+			},
+		},
+		UserName: "123",
+		Password: "456",
+	}
+	err := Create[User](ddb, u)
+	if err != nil {
+		panic(err)
+	}
 }
