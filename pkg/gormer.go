@@ -32,10 +32,14 @@ type Model struct {
 	CustomerJsonField CustomerJsonField `gorm:"type:json" json:"customer_json_field"`
 }
 
-const customerJsonFieldPrefix = "gorm_cjw_"
+const customerJsonFieldPrefix = "cjw_"
 
 func IfCustomerJsonField(field string) bool {
 	return strings.HasPrefix(field, customerJsonFieldPrefix)
+}
+
+// AdvancedWhere 高级查询扩展，类似
+type AdvancedWhere struct {
 }
 
 type Order int
@@ -79,9 +83,10 @@ type Where struct {
 }
 
 type QueryListResult[T any] struct {
-	Total int64 `json:"total"`
-	Page  int   `json:"page"`
-	Data  []T   `json:"data"`
+	Total    int64 `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"page_size"`
+	Data     []T   `json:"data"`
 }
 
 func NewQueryListConfig[T any]() *QueryListConfig[T] {
@@ -142,9 +147,10 @@ func (qc *QueryListConfig[T]) WithPage(page int) *QueryListConfig[T] {
 func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*QueryListResult[T], error) {
 
 	qr := &QueryListResult[T]{
-		Total: 0,
-		Page:  qc.Page,
-		Data:  make([]T, 0),
+		Total:    0,
+		Page:     qc.Page,
+		PageSize: qc.PageSize,
+		Data:     make([]T, 0),
 	}
 
 	dc = dc.Model(*new(T))
@@ -204,29 +210,36 @@ func Create[T any](db *gorm.DB, t T) error {
 
 }
 
-type QueryConfig struct {
-	Wheres   []Where  `json:"wheres"`
-	Preloads []string `json:"preloads"`
+type QueryConfig[T any] struct {
+	Wheres          []Where             `json:"wheres"`
+	Preloads        []string            `json:"preloads"`
+	AdviceItemFuncs []AdviceItemFunc[T] `json:"advice_item_funcs"`
 }
 
-func NewQueryConfig() *QueryConfig {
-	return &QueryConfig{
-		Wheres:   []Where{},
-		Preloads: []string{},
+func NewQueryConfig[T any]() *QueryConfig[T] {
+	return &QueryConfig[T]{
+		Wheres:          []Where{},
+		Preloads:        []string{},
+		AdviceItemFuncs: make([]AdviceItemFunc[T], 0),
 	}
 }
 
-func (qc *QueryConfig) WithWheres(wheres []Where) *QueryConfig {
+func (qc *QueryConfig[T]) WithWheres(wheres []Where) *QueryConfig[T] {
 	qc.Wheres = append(qc.Wheres, wheres...)
 	return qc
 }
 
-func (qc *QueryConfig) WithPreloads(preloads []string) *QueryConfig {
+func (qc *QueryConfig[T]) WithPreloads(preloads []string) *QueryConfig[T] {
 	qc.Preloads = append(qc.Preloads, preloads...)
 	return qc
 }
 
-func Exist[T any](db *gorm.DB, qc *QueryConfig) (bool, error) {
+func (qc *QueryConfig[T]) WithAdviceItemFunc(funcs []AdviceItemFunc[T]) *QueryConfig[T] {
+	qc.AdviceItemFuncs = append(qc.AdviceItemFuncs, funcs...)
+	return qc
+}
+
+func Exist[T any](db *gorm.DB, qc *QueryConfig[T]) (bool, error) {
 	if db == nil {
 		return false, fmt.Errorf("get db client failed")
 	}
@@ -261,7 +274,7 @@ func Update[T any](db *gorm.DB, t *T) error {
 	return db.Save(t).Error
 }
 
-func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
+func Delete[T any](db *gorm.DB, qc *QueryConfig[T]) error {
 	if db == nil {
 		return fmt.Errorf("get db client failed")
 	}
@@ -275,7 +288,7 @@ func Delete[T any](db *gorm.DB, qc *QueryConfig) error {
 	return db.Delete(t).Error
 }
 
-func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
+func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 
 	if db == nil {
 		return nil, fmt.Errorf("get db client failed")
@@ -310,6 +323,14 @@ func Query[T any](db *gorm.DB, qc *QueryConfig) (*T, error) {
 	} else if e != nil {
 		return nil, e
 
+	}
+
+	for _, itemFunc := range qc.AdviceItemFuncs {
+		var err error
+		*t, err = itemFunc(*t)
+		if err != nil {
+			slog.Warn(err.Error())
+		}
 	}
 
 	return t, nil
