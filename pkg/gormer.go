@@ -336,3 +336,36 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 	return t, nil
 
 }
+
+func BeforeContent[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, error) {
+	qc := NewQueryConfig[T]().WithWheres([]Where{
+		{
+			Query: "id = ?",
+			Args:  id,
+		},
+	})
+
+	exist, err := Exist[T](dbe, qc)
+
+	if err != nil {
+		return "", err
+	}
+
+	if !exist {
+		return "", nil
+	}
+
+	dictData, err := Query[T](dbq, qc)
+
+	if err != nil {
+		return "", err
+	}
+
+	marshal, err := json.Marshal(dictData)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(marshal), nil
+}
