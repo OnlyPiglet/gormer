@@ -337,7 +337,7 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 
 }
 
-func BeforeContent[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, error) {
+func EntityContentById[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, error) {
 	qc := NewQueryConfig[T]().WithWheres([]Where{
 		{
 			Query: "id = ?",
