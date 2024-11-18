@@ -288,6 +288,7 @@ func Delete[T any](db *gorm.DB, qc *QueryConfig[T]) error {
 	return db.Delete(t).Error
 }
 
+// BatchUpdate 批量更新，如存在错误，会回滚所有批量操作
 func BatchUpdate[T any](db *gorm.DB, records []T) error {
 	tx := db.Begin()
 	for _, record := range records {
@@ -301,6 +302,7 @@ func BatchUpdate[T any](db *gorm.DB, records []T) error {
 	return nil
 }
 
+// BatchCreate 批量创建，如存在错误，会回滚所有批量操作
 func BatchCreate[T any](db *gorm.DB, records []*T) error {
 	tx := db.Begin()
 	for _, record := range records {
@@ -314,6 +316,7 @@ func BatchCreate[T any](db *gorm.DB, records []*T) error {
 	return nil
 }
 
+// BatchDelete 批量删除，如存在错误，会回滚所有批量操作
 func BatchDelete[T any](db *gorm.DB, records []*T) error {
 	tx := db.Begin()
 	for _, record := range records {
