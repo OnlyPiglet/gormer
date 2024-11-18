@@ -317,7 +317,7 @@ func BatchCreate[T any](db *gorm.DB, records []*T) error {
 }
 
 // BatchDelete 批量删除，如存在错误，会回滚所有批量操作
-func BatchDelete[T any](db *gorm.DB, records []*T) error {
+func BatchDelete[T any](db *gorm.DB, records []T) error {
 	tx := db.Begin()
 	for _, record := range records {
 		err := tx.Delete(record).Error
