@@ -288,6 +288,45 @@ func Delete[T any](db *gorm.DB, qc *QueryConfig[T]) error {
 	return db.Delete(t).Error
 }
 
+func BatchUpdate[T any](db *gorm.DB, records []T) error {
+	tx := db.Begin()
+	for _, record := range records {
+		err := Update[T](tx, &record)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
+func BatchCreate[T any](db *gorm.DB, records []*T) error {
+	tx := db.Begin()
+	for _, record := range records {
+		err := Create[T](tx, *record)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
+func BatchDelete[T any](db *gorm.DB, records []*T) error {
+	tx := db.Begin()
+	for _, record := range records {
+		err := tx.Delete(record).Error
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
 func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 
 	if db == nil {

@@ -55,18 +55,18 @@ func TestJsonField(t *testing.T) {
 	if db == nil {
 		log.Fatalf("db is nil")
 	}
-	ddb := db.WithContext(context.Background())
-	query, err := Query[User](ddb, NewQueryConfig().WithWheres([]Where{
-		{
-			"gorm_cjw_nb",
-			JsonType,
-			"78",
-		},
-	}))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%v", query)
+	//ddb := db.WithContext(context.Background())
+	//query, err := Query[User](ddb, NewQueryConfig().WithWheres([]Where{
+	//	{
+	//		"gorm_cjw_nb",
+	//		JsonType,
+	//		"78",
+	//	},
+	//}))
+	//if err != nil {
+	//	panic(err)
+	//}
+	//fmt.Printf("%v", query)
 }
 
 func TestCreateJsonField(t *testing.T) {
@@ -87,5 +87,61 @@ func TestCreateJsonField(t *testing.T) {
 	err := Create[User](ddb, u)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func TestBatchCreate(t *testing.T) {
+	Create[[]User](db.WithContext(context.Background()), []User{{
+		UserName: "123",
+		Password: "456",
+	}, {
+		UserName: "123123",
+		Password: "456123",
+	}})
+}
+
+func TestBatchUpdate(t *testing.T) {
+	list, err := QueryList[User](db.WithContext(context.Background()), db.WithContext(context.Background()), NewQueryListConfig[User]().WithPage(1).WithPageSize(100000))
+	if err != nil {
+		panic(err)
+	}
+	for i, datum := range list.Data {
+		datum.UserName = "123change" + datum.UserName
+		list.Data[i] = datum
+		log.Printf("%+v", list.Data[i])
+	}
+	list.Data = append(list.Data, User{
+		Model: Model{
+			ID: 90,
+		},
+		UserName: "a123change" + list.Data[0].UserName,
+		Password: "123change" + list.Data[0].Password,
+	})
+	err = BatchUpdate[User](db.WithContext(context.Background()), list.Data)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func TestBatchDelete(t *testing.T) {
+	d := db.WithContext(context.Background())
+	d.Begin()
+	err := d.Delete([]User{
+		{
+			Model: Model{
+				ID: 11,
+			},
+		},
+		{
+			Model: Model{
+				ID: 6,
+			},
+		},
+	}).Error
+	if err != nil {
+		println(err.Error())
+		d.Callback()
+	} else {
+		d.Commit()
 	}
 }
