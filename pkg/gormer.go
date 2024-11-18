@@ -303,10 +303,10 @@ func BatchUpdate[T any](db *gorm.DB, records []T) error {
 }
 
 // BatchCreate 批量创建，如存在错误，会回滚所有批量操作
-func BatchCreate[T any](db *gorm.DB, records []*T) error {
+func BatchCreate[T any](db *gorm.DB, records []T) error {
 	tx := db.Begin()
 	for _, record := range records {
-		err := Create[T](tx, *record)
+		err := Create[T](tx, record)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -320,7 +320,7 @@ func BatchCreate[T any](db *gorm.DB, records []*T) error {
 func BatchDelete[T any](db *gorm.DB, records []T) error {
 	tx := db.Begin()
 	for _, record := range records {
-		err := tx.Delete(record).Error
+		err := tx.Delete(&record).Error
 		if err != nil {
 			tx.Rollback()
 			return err
