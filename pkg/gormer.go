@@ -74,6 +74,7 @@ type QueryListConfig[T any] struct {
 	CustomerJsonWheres []Where             `json:"customer_json_where"`
 	AdviceItemFuncs    []AdviceItemFunc[T] `json:"advice_item_funcs"`
 	Preloads           []string            `json:"preloads"`
+	Omits              []string            `json:"omits"`
 }
 
 type Where struct {
@@ -110,6 +111,11 @@ func (qc *QueryListConfig[T]) WithWheres(wheres []Where) *QueryListConfig[T] {
 
 func (qc *QueryListConfig[T]) WithPreloads(preloads []string) *QueryListConfig[T] {
 	qc.Preloads = append(qc.Preloads, preloads...)
+	return qc
+}
+
+func (qc *QueryListConfig[T]) WithOmits(omits []string) *QueryListConfig[T] {
+	qc.Omits = append(qc.Omits, omits...)
 	return qc
 }
 
@@ -181,6 +187,10 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 		}
 	}
 
+	if qc.Omits != nil && len(qc.Omits) > 0 {
+		tdc.Omit(qc.Omits...)
+	}
+
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
 
 	if err != nil {
@@ -213,6 +223,7 @@ func Create[T any](db *gorm.DB, t T) error {
 type QueryConfig[T any] struct {
 	Wheres          []Where             `json:"wheres"`
 	Preloads        []string            `json:"preloads"`
+	Omits           []string            `json:"omits"`
 	AdviceItemFuncs []AdviceItemFunc[T] `json:"advice_item_funcs"`
 }
 
@@ -231,6 +242,11 @@ func (qc *QueryConfig[T]) WithWheres(wheres []Where) *QueryConfig[T] {
 
 func (qc *QueryConfig[T]) WithPreloads(preloads []string) *QueryConfig[T] {
 	qc.Preloads = append(qc.Preloads, preloads...)
+	return qc
+}
+
+func (qc *QueryConfig[T]) WithOmits(omits []string) *QueryConfig[T] {
+	qc.Omits = append(qc.Omits, omits...)
 	return qc
 }
 
@@ -347,6 +363,10 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 				db = db.Where(where.Query, where.Args)
 			}
 		}
+	}
+
+	if qc.Omits != nil && len(qc.Omits) > 0 {
+		db = db.Omit(qc.Omits...)
 	}
 
 	if qc != nil && qc.Preloads != nil {

@@ -99,6 +99,22 @@ func TestBatchCreate(t *testing.T) {
 	})
 }
 
+func TestGetUser(t *testing.T) {
+
+	list, err := QueryList[User](db.WithContext(context.Background()), db.WithContext(context.Background()), NewQueryListConfig[User]().WithWheres(
+		[]Where{
+			{
+				Query: "user_name = ?",
+				Args:  "aaaa123changeaasd123changea123change123changechange123",
+			},
+		}).WithOmits([]string{"UserName"}))
+
+	if err != nil {
+		panic(err)
+	}
+	println(list.Data[0].Password)
+}
+
 func TestBatchUpdate(t *testing.T) {
 	list, err := QueryList[User](db.WithContext(context.Background()), db.WithContext(context.Background()), NewQueryListConfig[User]().WithPage(1).WithPageSize(100000))
 	if err != nil {
