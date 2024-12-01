@@ -92,7 +92,7 @@ type QueryListResult[T any] struct {
 
 func NewQueryListConfig[T any]() *QueryListConfig[T] {
 	return &QueryListConfig[T]{
-		PageSize:        10,
+		PageSize:        999999,
 		Page:            1,
 		Order:           DESC,
 		OrderBy:         "updated_at",
