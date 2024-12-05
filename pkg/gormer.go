@@ -431,3 +431,59 @@ func EntityContentById[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, er
 
 	return string(marshal), nil
 }
+
+func QueryAll[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
+
+	qr := &QueryListResult[T]{
+		Total: 0,
+		Data:  make([]T, 0),
+	}
+
+	dc = dc.Model(*new(T))
+
+	for _, where := range qc.Wheres {
+		dc = dc.Where(where.Query, where.Args)
+	}
+
+	if err := dc.Count(&qr.Total).Error; err != nil {
+		return nil, err
+	}
+
+	tdc = tdc.Model(*new(T))
+	for _, where := range qc.Wheres {
+		switch where.Type {
+		case JsonType:
+			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			tdc = tdc.Where(where.Query, where.Args)
+		}
+	}
+
+	if qc != nil && qc.Preloads != nil {
+		for _, preload := range qc.Preloads {
+			tdc = tdc.Preload(preload)
+		}
+	}
+
+	if qc.Omits != nil && len(qc.Omits) > 0 {
+		tdc.Omit(qc.Omits...)
+	}
+
+	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Find(&qr.Data).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, itemFunc := range qc.AdviceItemFuncs {
+		for j, datum := range qr.Data {
+			qr.Data[j], err = itemFunc(datum)
+			if err != nil {
+				slog.Warn(err.Error())
+			}
+		}
+	}
+
+	return qr.Data, nil
+
+}
