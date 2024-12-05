@@ -432,21 +432,11 @@ func EntityContentById[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, er
 	return string(marshal), nil
 }
 
-func QueryAll[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
+func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 
 	qr := &QueryListResult[T]{
 		Total: 0,
 		Data:  make([]T, 0),
-	}
-
-	dc = dc.Model(*new(T))
-
-	for _, where := range qc.Wheres {
-		dc = dc.Where(where.Query, where.Args)
-	}
-
-	if err := dc.Count(&qr.Total).Error; err != nil {
-		return nil, err
 	}
 
 	tdc = tdc.Model(*new(T))
