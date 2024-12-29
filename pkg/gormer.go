@@ -172,14 +172,6 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 	offset := (qc.Page - 1) * qc.PageSize
 
 	tdc = tdc.Model(*new(T))
-	for _, where := range qc.Wheres {
-		switch where.Type {
-		case JsonType:
-			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-		default:
-			tdc = tdc.Where(where.Query, where.Args)
-		}
-	}
 
 	if qc != nil && qc.Preloads != nil {
 		for _, preload := range qc.Preloads {
@@ -189,6 +181,15 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 
 	if qc.Omits != nil && len(qc.Omits) > 0 {
 		tdc.Omit(qc.Omits...)
+	}
+
+	for _, where := range qc.Wheres {
+		switch where.Type {
+		case JsonType:
+			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			tdc = tdc.Where(where.Query, where.Args)
+		}
 	}
 
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
@@ -354,6 +355,16 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 
 	db = db.Model(*new(T))
 
+	if qc.Omits != nil && len(qc.Omits) > 0 {
+		db = db.Omit(qc.Omits...)
+	}
+
+	if qc != nil && qc.Preloads != nil {
+		for _, preload := range qc.Preloads {
+			db = db.Preload(preload)
+		}
+	}
+
 	if qc != nil && qc.Wheres != nil {
 		for _, where := range qc.Wheres {
 			switch where.Type {
@@ -362,16 +373,6 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 			default:
 				db = db.Where(where.Query, where.Args)
 			}
-		}
-	}
-
-	if qc.Omits != nil && len(qc.Omits) > 0 {
-		db = db.Omit(qc.Omits...)
-	}
-
-	if qc != nil && qc.Preloads != nil {
-		for _, preload := range qc.Preloads {
-			db = db.Preload(preload)
 		}
 	}
 
@@ -440,14 +441,6 @@ func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 	}
 
 	tdc = tdc.Model(*new(T))
-	for _, where := range qc.Wheres {
-		switch where.Type {
-		case JsonType:
-			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-		default:
-			tdc = tdc.Where(where.Query, where.Args)
-		}
-	}
 
 	if qc != nil && qc.Preloads != nil {
 		for _, preload := range qc.Preloads {
@@ -457,6 +450,15 @@ func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 
 	if qc.Omits != nil && len(qc.Omits) > 0 {
 		tdc.Omit(qc.Omits...)
+	}
+
+	for _, where := range qc.Wheres {
+		switch where.Type {
+		case JsonType:
+			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			tdc = tdc.Where(where.Query, where.Args)
+		}
 	}
 
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Find(&qr.Data).Error
