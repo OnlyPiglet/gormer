@@ -134,3 +134,58 @@ func TestBatchUpdate(t *testing.T) {
 func TestBatchDelete(t *testing.T) {
 	BatchDelete[User](db.WithContext(context.Background()), []User{{Model: Model{ID: 90}}, {Model: Model{ID: 91}}})
 }
+
+type B struct {
+	Model
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (b *B) TableName() string {
+	return "b"
+}
+
+type A struct {
+	Model
+	Bid uint
+	B   B `gorm:"foreignKey:Bid;references:ID"`
+}
+
+func (a *A) TableName() string {
+	return "a"
+}
+
+func TestKey(t *testing.T) {
+	testing.Init()
+
+	db.Exec("drop table a;")
+	db.Exec("drop table b;")
+	db.Migrator().AutoMigrate(A{}, B{})
+	//db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(A{}).Delete(B{})
+
+	db.Save(&B{
+		Model:    Model{ID: 3},
+		Username: "3",
+		Password: "3",
+	})
+
+	db.Save(&B{
+		Model:    Model{ID: 2},
+		Username: "2",
+		Password: "2",
+	})
+	a := &A{
+		Bid: 3,
+		B: B{
+			Model:    Model{ID: 3},
+			Username: "2",
+			Password: "2",
+		},
+	}
+
+	db.Session(&gorm.Session{
+		//此字段 true 则会联机更新 子对象的属性，否则只更新外键
+		FullSaveAssociations: false,
+	}).Save(a)
+
+}
