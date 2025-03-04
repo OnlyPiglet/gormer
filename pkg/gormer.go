@@ -347,6 +347,54 @@ func BatchDelete[T any](db *gorm.DB, records []T) error {
 	return nil
 }
 
+func QueryWithNotFoundErr[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
+	if db == nil {
+		return nil, fmt.Errorf("get db client failed")
+	}
+
+	db = db.Model(*new(T))
+
+	if qc.Omits != nil && len(qc.Omits) > 0 {
+		db = db.Omit(qc.Omits...)
+	}
+
+	if qc != nil && qc.Preloads != nil {
+		for _, preload := range qc.Preloads {
+			db = db.Preload(preload)
+		}
+	}
+
+	if qc != nil && qc.Wheres != nil {
+		for _, where := range qc.Wheres {
+			switch where.Type {
+			case JsonType:
+				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+			default:
+				db = db.Where(where.Query, where.Args)
+			}
+		}
+	}
+
+	t := new(T)
+
+	e := db.First(t).Error
+
+	if e != nil {
+		return nil, e
+	}
+
+	for _, itemFunc := range qc.AdviceItemFuncs {
+		var err error
+		*t, err = itemFunc(*t)
+		if err != nil {
+			slog.Warn(err.Error())
+		}
+	}
+
+	return t, nil
+
+}
+
 func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 
 	if db == nil {
