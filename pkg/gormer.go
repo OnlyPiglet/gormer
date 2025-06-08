@@ -32,6 +32,18 @@ type Model struct {
 	CustomerJsonField CustomerJsonField `gorm:"type:json" json:"customer_json_field"`
 }
 
+func (cjf *CustomerJsonField) MarshalCSV() (string, error) {
+	b, err := json.Marshal(cjf)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func (cjf *CustomerJsonField) UnmarshalCSV(s string) error {
+	return json.Unmarshal([]byte(s), cjf)
+}
+
 const customerJsonFieldPrefix = "cjw_"
 
 func IfCustomerJsonField(field string) bool {
