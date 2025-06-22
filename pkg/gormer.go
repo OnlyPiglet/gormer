@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"gorm.io/gorm"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -29,7 +30,7 @@ type Model struct {
 	CreatedAt         time.Time         `json:"created_at"`
 	UpdatedAt         time.Time         `json:"updated_at"`
 	DeletedAt         gorm.DeletedAt    `gorm:"index" json:"deleted_at"`
-	CustomerJsonField CustomerJsonField `gorm:"type:json" json:"customer_json_field"`
+	CustomerJsonField CustomerJsonField `gorm:"type:json;comment:'自定义json字段'" json:"customer_json_field"`
 }
 
 func (cjf *CustomerJsonField) MarshalCSV() (string, error) {
@@ -491,6 +492,72 @@ func EntityContentById[T any](dbe *gorm.DB, dbq *gorm.DB, id string) (string, er
 	}
 
 	return string(marshal), nil
+}
+
+func QueryMeta[T any]() (map[string]string, error) {
+	tptr := new(T)
+	t := *tptr
+	result := make(map[string]string)
+
+	var parseStruct func(reflect.Type, string)
+	parseStruct = func(typeOfT reflect.Type, prefix string) {
+		if typeOfT.Kind() == reflect.Ptr {
+			typeOfT = typeOfT.Elem()
+		}
+		if typeOfT.Kind() != reflect.Struct {
+			return
+		}
+		for i := 0; i < typeOfT.NumField(); i++ {
+			field := typeOfT.Field(i)
+			jsonTag := field.Tag.Get("json")
+			if jsonTag == "-" {
+				continue
+			}
+			// 只取tag的第一个逗号前内容
+			if idx := strings.Index(jsonTag, ","); idx != -1 {
+				jsonTag = jsonTag[:idx]
+			}
+
+			fieldType := field.Type
+			isStruct := fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct)
+			if isStruct && (field.Anonymous || jsonTag != "") && fieldType != reflect.TypeOf(time.Time{}) {
+				// 递归嵌套结构体，匿名或有json tag
+				var childPrefix string
+				if jsonTag != "" {
+					if prefix != "" {
+						childPrefix = prefix + "." + jsonTag
+					} else {
+						childPrefix = jsonTag
+					}
+				} else if field.Anonymous {
+					childPrefix = prefix
+				}
+				parseStruct(fieldType, childPrefix)
+				continue
+			}
+
+			if jsonTag == "" {
+				continue
+			}
+			fullKey := jsonTag
+			if prefix != "" {
+				fullKey = prefix + "." + jsonTag
+			}
+			gormTag := field.Tag.Get("gorm")
+			comment := ""
+			for _, tagPart := range strings.Split(gormTag, ";") {
+				if strings.HasPrefix(strings.TrimSpace(tagPart), "comment:") {
+					comment = strings.TrimPrefix(strings.TrimSpace(tagPart), "comment:")
+					break
+				}
+			}
+			result[fullKey] = comment
+		}
+	}
+
+	typeOfT := reflect.TypeOf(t)
+	parseStruct(typeOfT, "")
+	return result, nil
 }
 
 func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {

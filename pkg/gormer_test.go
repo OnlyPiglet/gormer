@@ -47,8 +47,8 @@ func init() {
 
 type User struct {
 	Model
-	UserName string `json:"user_name"`
-	Password string `json:"password"`
+	UserName string `json:"user_name" gorm:"column:user_name;type:varchar(255);comment:'姓名'"`
+	Password string `json:"password" gorm:"column:password;type:varchar(255);comment:'年龄'"`
 }
 
 func TestJsonField(t *testing.T) {
@@ -188,4 +188,15 @@ func TestKey(t *testing.T) {
 		FullSaveAssociations: false,
 	}).Save(a)
 
+}
+
+func TestMetaInfo(t *testing.T) {
+	meta, err := QueryMeta[User]()
+	if err != nil {
+		panic(err)
+	}
+	for s, s2 := range meta {
+		fmt.Println(s)
+		fmt.Println(s2)
+	}
 }
