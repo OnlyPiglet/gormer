@@ -244,6 +244,16 @@ func CreateWithT[T any](db *gorm.DB, t T) (*T, error) {
 
 }
 
+func CreateWithTPtr[T any](db *gorm.DB, t *T) error {
+
+	if db == nil {
+		return fmt.Errorf("get db client failed")
+	}
+
+	return db.Model(*new(T)).Create(&t).Error
+
+}
+
 type QueryConfig[T any] struct {
 	Wheres          []Where             `json:"wheres"`
 	Preloads        []string            `json:"preloads"`
