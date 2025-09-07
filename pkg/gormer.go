@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
 	"log/slog"
 	"reflect"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type CustomerJsonField map[string]interface{}
@@ -625,4 +626,16 @@ func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 
 	return qr.Data, nil
 
+}
+
+func CreateOrUpdate[T any](tdc *gorm.DB, t *T, query *QueryConfig[T]) error {
+	exist, err := Exist[T](tdc, query)
+	if err != nil {
+		return err
+	}
+	if exist {
+		return Update[T](tdc, t)
+	} else {
+		return Create[T](tdc, *t)
+	}
 }
