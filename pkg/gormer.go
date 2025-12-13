@@ -381,6 +381,33 @@ func BatchDelete[T any](db *gorm.DB, records []T) error {
 	return nil
 }
 
+// BatchDeleteWithWheres 批量删除指定条件的记录，如存在错误，会回滚所有批量操作
+func BatchDeleteWithWheres[T any](db *gorm.DB, wheres []Where) error {
+	if db == nil {
+		return fmt.Errorf("get db client failed")
+	}
+
+	tx := db.Begin()
+
+	query := tx.Model(*new(T))
+	for _, where := range wheres {
+		switch where.Type {
+		case JsonType:
+			query = query.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			query = query.Where(where.Query, where.Args)
+		}
+	}
+
+	var t T
+	if err := query.Delete(&t).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	tx.Commit()
+	return nil
+}
+
 func QueryWithNotFoundErr[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 	if db == nil {
 		return nil, fmt.Errorf("get db client failed")
