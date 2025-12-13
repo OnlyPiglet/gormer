@@ -197,14 +197,7 @@ func QueryList[T any](dc *gorm.DB, tdc *gorm.DB, qc *QueryListConfig[T]) (*Query
 		tdc.Omit(qc.Omits...)
 	}
 
-	for _, where := range qc.Wheres {
-		switch where.Type {
-		case JsonType:
-			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-		default:
-			tdc = tdc.Where(where.Query, where.Args)
-		}
-	}
+	tdc = applyWheres(tdc, qc.Wheres)
 
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Offset(offset).Limit(qc.PageSize).Find(&qr.Data).Error
 
@@ -297,15 +290,8 @@ func Exist[T any](db *gorm.DB, qc *QueryConfig[T]) (bool, error) {
 
 	db = db.Model(*new(T))
 
-	if qc != nil && qc.Wheres != nil {
-		for _, where := range qc.Wheres {
-			switch where.Type {
-			case JsonType:
-				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-			default:
-				db = db.Where(where.Query, where.Args)
-			}
-		}
+	if qc != nil {
+		db = applyWheres(db, qc.Wheres)
 	}
 
 	count := int64(0)
@@ -369,7 +355,65 @@ func BatchCreate[T any](db *gorm.DB, records []T) error {
 
 // BatchDelete 批量删除，如存在错误，会回滚所有批量操作
 func BatchDelete[T any](db *gorm.DB, records []T) error {
+	if db == nil {
+		return fmt.Errorf("get db client failed")
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	batchSize := 1000
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+
 	tx := db.Begin()
+
+	stmt := &gorm.Statement{DB: tx}
+	if err := stmt.Parse(*new(T)); err == nil && stmt.Schema != nil && stmt.Schema.PrioritizedPrimaryField != nil {
+		pkDBName := stmt.Schema.PrioritizedPrimaryField.DBName
+		pkFieldName := stmt.Schema.PrioritizedPrimaryField.Name
+
+		ids := make([]interface{}, 0, len(records))
+		for _, record := range records {
+			v := reflect.ValueOf(record)
+			if v.Kind() == reflect.Ptr {
+				v = v.Elem()
+			}
+			if !v.IsValid() {
+				continue
+			}
+			f := v.FieldByName(pkFieldName)
+			if !f.IsValid() {
+				continue
+			}
+			ids = append(ids, f.Interface())
+		}
+
+		if len(ids) > 0 {
+			for start := 0; start < len(ids); start += batchSize {
+				end := start + batchSize
+				if end > len(ids) {
+					end = len(ids)
+				}
+				chunk := ids[start:end]
+				if len(chunk) == 0 {
+					continue
+				}
+
+				var t T
+				if err := tx.Model(&t).Where(fmt.Sprintf("%s IN ?", pkDBName), chunk).Delete(&t).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+			}
+
+			tx.Commit()
+			return nil
+		}
+	}
+
 	for _, record := range records {
 		err := tx.Delete(&record).Error
 		if err != nil {
@@ -381,6 +425,18 @@ func BatchDelete[T any](db *gorm.DB, records []T) error {
 	return nil
 }
 
+func applyWheres(db *gorm.DB, wheres []Where) *gorm.DB {
+	for _, where := range wheres {
+		switch where.Type {
+		case JsonType:
+			db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
+		default:
+			db = db.Where(where.Query, where.Args)
+		}
+	}
+	return db
+}
+
 // BatchDeleteWithWheres 批量删除指定条件的记录，如存在错误，会回滚所有批量操作
 func BatchDeleteWithWheres[T any](db *gorm.DB, wheres []Where) error {
 	if db == nil {
@@ -389,15 +445,7 @@ func BatchDeleteWithWheres[T any](db *gorm.DB, wheres []Where) error {
 
 	tx := db.Begin()
 
-	query := tx.Model(*new(T))
-	for _, where := range wheres {
-		switch where.Type {
-		case JsonType:
-			query = query.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-		default:
-			query = query.Where(where.Query, where.Args)
-		}
-	}
+	query := applyWheres(tx.Model(*new(T)), wheres)
 
 	var t T
 	if err := query.Delete(&t).Error; err != nil {
@@ -406,6 +454,20 @@ func BatchDeleteWithWheres[T any](db *gorm.DB, wheres []Where) error {
 	}
 	tx.Commit()
 	return nil
+}
+
+func CountWithWheres[T any](db *gorm.DB, wheres []Where) (int64, error) {
+	if db == nil {
+		return 0, fmt.Errorf("get db client failed")
+	}
+
+	query := applyWheres(db.Model(*new(T)), wheres)
+
+	count := int64(0)
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func QueryWithNotFoundErr[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
@@ -425,15 +487,8 @@ func QueryWithNotFoundErr[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 		}
 	}
 
-	if qc != nil && qc.Wheres != nil {
-		for _, where := range qc.Wheres {
-			switch where.Type {
-			case JsonType:
-				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-			default:
-				db = db.Where(where.Query, where.Args)
-			}
-		}
+	if qc != nil {
+		db = applyWheres(db, qc.Wheres)
 	}
 
 	t := new(T)
@@ -474,15 +529,8 @@ func Query[T any](db *gorm.DB, qc *QueryConfig[T]) (*T, error) {
 		}
 	}
 
-	if qc != nil && qc.Wheres != nil {
-		for _, where := range qc.Wheres {
-			switch where.Type {
-			case JsonType:
-				db = db.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-			default:
-				db = db.Where(where.Query, where.Args)
-			}
-		}
+	if qc != nil {
+		db = applyWheres(db, qc.Wheres)
 	}
 
 	t := new(T)
@@ -627,14 +675,7 @@ func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 		tdc.Omit(qc.Omits...)
 	}
 
-	for _, where := range qc.Wheres {
-		switch where.Type {
-		case JsonType:
-			tdc = tdc.Where(fmt.Sprintf("JSON_EXTRACT(`%s`,'$.%s') like (?)", customerJsonFieldName, where.Query), "%"+where.Args.(string)+"%")
-		default:
-			tdc = tdc.Where(where.Query, where.Args)
-		}
-	}
+	tdc = applyWheres(tdc, qc.Wheres)
 
 	err := tdc.Order(fmt.Sprintf("%s %s", qc.OrderBy, qc.Order.String())).Find(&qr.Data).Error
 
