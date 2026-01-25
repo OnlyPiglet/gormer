@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type CustomerJsonField map[string]interface{}
@@ -694,4 +695,63 @@ func QueryAll[T any](tdc *gorm.DB, qc *QueryListConfig[T]) ([]T, error) {
 
 	return qr.Data, nil
 
+}
+
+// UpsertConfig Upsert 配置
+type UpsertConfig struct {
+	// ConflictColumns 唯一索引的列名，用于判断冲突
+	ConflictColumns []string
+	// UpdateColumns 冲突时需要更新的列名，如果为空则更新除主键外的所有列
+	UpdateColumns []string
+}
+
+// Upsert 插入或更新记录（原子操作）
+// 如果唯一索引冲突，则更新指定的列；否则插入新记录
+// 使用 GORM 的 Clauses 和 OnConflict 实现，避免并发时的重复键错误
+func Upsert[T any](db *gorm.DB, t *T, config *UpsertConfig) error {
+	if db == nil {
+		return fmt.Errorf("get db client failed")
+	}
+
+	if config == nil || len(config.ConflictColumns) == 0 {
+		return fmt.Errorf("conflict columns must be specified")
+	}
+
+	// 构建冲突列
+	conflictCols := make([]clause.Column, 0, len(config.ConflictColumns))
+	for _, col := range config.ConflictColumns {
+		conflictCols = append(conflictCols, clause.Column{Name: col})
+	}
+
+	// 构建 OnConflict 子句
+	onConflict := clause.OnConflict{
+		Columns: conflictCols,
+	}
+
+	// 如果指定了更新列，则只更新这些列；否则更新所有列
+	if len(config.UpdateColumns) > 0 {
+		onConflict.DoUpdates = clause.AssignmentColumns(config.UpdateColumns)
+	} else {
+		onConflict.UpdateAll = true
+	}
+
+	return db.Clauses(onConflict).Create(t).Error
+}
+
+// FirstOrCreate 查找记录，如果不存在则创建
+// 使用 Where 条件查询，如果记录不存在则使用 t 的值创建新记录
+// 这个方法会先查询，如果不存在才插入，避免 UNIQUE 约束冲突
+func FirstOrCreate[T any](db *gorm.DB, t *T, wheres []Where) error {
+	if db == nil {
+		return fmt.Errorf("get db client failed")
+	}
+
+	if len(wheres) == 0 {
+		return fmt.Errorf("wheres must be specified for FirstOrCreate")
+	}
+
+	db = db.Model(*new(T))
+	db = applyWheres(db, wheres)
+
+	return db.FirstOrCreate(t).Error
 }
